@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Trie Search</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+      background: linear-gradient(-45deg, #e0e7ff, #c3e6cb, #fed7d7, #d6bcfa);
+      background-size: 400% 400%;
+      animation: gradient 15s ease infinite;
+    }
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .logo {
+      transition: transform 0.3s ease;
+    }
+    .logo:hover {
+      transform: scale(1.05);
+    }
+    .logo path {
+      transition: fill 0.3s ease;
+    }
+    .logo:hover path:nth-child(1) { fill: #4285F4; }
+    .logo:hover path:nth-child(2) { fill: #EA4335; }
+    .logo:hover path:nth-child(3) { fill: #FBBC05; }
+    .logo:hover path:nth-child(4) { fill: #34A853; }
+    @keyframes slideIn {
+      from { transform: translateX(-20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .suggestion-item {
+      animation: slideIn 0.2s ease forwards;
+    }
+    .search-container {
+      transition: box-shadow 0.3s ease;
+    }
+    .search-container:focus-within {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="w-full max-w-lg mx-auto p-6">
+    <div class="flex justify-center mb-8">
+      <svg class="logo w-48 h-24" viewBox="0 0 200 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 50 C20 20, 40 20, 50 50 C60 80, 80 80, 90 50" stroke="#4285F4" stroke-width="8" fill="none"/>
+        <path d="M60 50 H140" stroke="#EA4335" stroke-width="8" fill="none"/>
+        <path d="M150 50 C160 20, 180 20, 190 50 C180 80, 160 80, 150 50" stroke="#FBBC05" stroke-width="8" fill="none"/>
+        <path d="M100 20 V80" stroke="#34A853" stroke-width="8" fill="none"/>
+      </svg>
+    </div>
+    <div class="relative search-container">
+      <input
+        type="text"
+        id="search"
+        placeholder="Search with Trie..."
+        autocomplete="off"
+        class="w-full p-4 text-lg rounded-full bg-white shadow-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
+      >
+      <ul id="suggestions" class="absolute w-full mt-2 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden hidden"></ul>
+    </div>
+    <div id="error" class="mt-4 text-red-500 hidden"></div>
+  </div>
+
+  <script>
+    // Animate logo
+    const logo = document.querySelector('.logo');
+    logo.style.opacity = 0;
+    logo.style.transform = 'translateY(-50px)';
+    setTimeout(() => {
+      logo.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+      logo.style.opacity = 1;
+      logo.style.transform = 'translateY(0)';
+    }, 100);
+
+    // Display error message
+    function showError(message) {
+      const errorDiv = document.getElementById('error');
+      errorDiv.textContent = message;
+      errorDiv.classList.remove('hidden');
+      setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+    }
+
+    // Fetch and display suggestions
+    async function getSuggestions(query) {
+      const list = document.getElementById('suggestions');
+      list.innerHTML = '';
+      list.classList.toggle('hidden', query.length === 0);
+
+      if (query.length === 0) return;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:5000/suggest?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // Display suggestions
+        if (data.suggestions && data.suggestions.length > 0) {
+          data.suggestions.forEach((s, index) => {
+            const li = document.createElement('li');
+            li.textContent = s;
+            li.className = 'px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors duration-200 suggestion-item';
+            li.style.animationDelay = `${index * 50}ms`;
+            li.onclick = () => selectSuggestion(s);
+            list.appendChild(li);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.textContent = 'No suggestions found';
+          li.className = 'px-4 py-2 text-gray-500';
+          list.appendChild(li);
+        }
+      } catch (err) {
+        console.error('Error fetching suggestions:', err);
+        showError('Failed to load suggestions. Please try again.');
+      }
+    }
+
+    // Handle suggestion selection
+    async function selectSuggestion(s) {
+      const searchInput = document.getElementById('search');
+      searchInput.value = s;
+      document.getElementById('suggestions').classList.add('hidden');
+
+      try {
+        await fetch('http://127.0.0.1:5000/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: s })
+        });
+        // Redirect to results page with query
+        window.location.href = `results.html?q=${encodeURIComponent(s)}`;
+      } catch (err) {
+        console.error('Error saving suggestion:', err);
+        showError('Failed to save query. Please try again.');
+      }
+    }
+
+    // Debounce function
+    function debounce(func, wait) {
+      let timeout;
+      return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    // Handle input
+    const searchInput = document.getElementById('search');
+    searchInput.addEventListener('input', debounce(() => getSuggestions(searchInput.value), 300));
+    searchInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && searchInput.value) {
+        try {
+          await fetch('http://127.0.0.1:5000/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchInput.value })
+          });
+          window.location.href = `results.html?q=${encodeURIComponent(searchInput.value)}`;
+        } catch (err) {
+          console.error('Error saving query:', err);
+          showError('Failed to save query. Please try again.');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search Results</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(-45deg, #e0e7ff, #c3e6cb, #fed7d7, #d6bcfa);
+      background-size: 400% 400%;
+      animation: gradient 15s ease infinite;
+    }
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    .result-card {
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .result-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    }
+    .search-container {
+      transition: box-shadow 0.3s ease;
+    }
+    .search-container:focus-within {
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .result-card {
+      animation: fadeIn 0.3s ease forwards;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(-20px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .suggestion-item {
+      animation: slideIn 0.2s ease forwards;
+    }
+    .logo path {
+      transition: fill 0.3s ease;
+    }
+    .logo:hover path:nth-child(1) { fill: #4285F4; }
+    .logo:hover path:nth-child(2) { fill: #EA4335; }
+    .logo:hover path:nth-child(3) { fill: #FBBC05; }
+    .logo:hover path:nth-child(4) { fill: #34A853; }
+    .result-image {
+      object-fit: cover;
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+  <!-- Header -->
+  <header class="bg-white shadow-md py-4">
+    <div class="max-w-4xl mx-auto px-6 flex items-center justify-between">
+      <a href="index.html" class="flex items-center">
+        <svg class="logo w-32 h-16" viewBox="0 0 200 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 50 C20 20, 40 20, 50 50 C60 80, 80 80, 90 50" stroke="#4285F4" stroke-width="8"/>
+          <path d="M60 50 H140" stroke="#EA4335" stroke-width="8"/>
+          <path d="M150 50 C160 20, 180 20, 190 50 C180 80 160 80 150 50" stroke="#FBBC05" stroke-width="8"/>
+          <path d="M100 20 V80" stroke="#34A853" stroke-width="8"/>
+        </svg>
+      </a>
+      <div class="relative search-container w-full max-w-lg">
+        <input
+          type="text"
+          id="search"
+          placeholder="Search again..."
+          autocomplete="off"
+          class="w-full p-3 text-base rounded-full bg-gray-100 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300"
+        >
+        <ul id="suggestions" class="absolute w-full mt-2 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden hidden"></ul>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow max-w-4xl mx-auto px-6 py-8">
+    <h1 id="results-header" class="text-3xl font-bold text-gray-800 mb-6"></h1>
+    <div id="loading" class="text-gray-600 text-center hidden">Loading results...</div>
+    <div id="results" class="space-y-4"></div>
+    <div id="error" class="mt-2 hidden">
+      <div class="bg-white border border-red-400 text-gray-700 p-4 rounded-lg shadow">
+        <span id="error-message"></span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white py-4 mt-auto">
+    <div class="max-w-4xl mx-auto px-6 text-center">
+      <p class="text-sm">© 2025 Trie Search. Powered by Wikipedia API.</p>
+      <div class="mt-2 space-x-4">
+        <a href="index.html" class="text-blue-300 hover:underline">Home</a>
+        <a href="#" class="text-blue-300 hover:underline">About</a>
+        <a href="#" class="text-blue-300 hover:underline">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Display error message
+    function showError(message) {
+      const errorDiv = document.getElementById('error');
+      const errorMessage = document.getElementById('error-message');
+      errorMessage.textContent = message;
+      errorDiv.classList.remove('hidden');
+      setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+    }
+
+    // Display loading state
+    function toggleLoading(show) {
+      document.getElementById('loading').classList.toggle('hidden', !show);
+    }
+
+    // Fetch and display suggestions
+    async function getSuggestions(query) {
+      const list = document.getElementById('suggestions');
+      list.innerHTML = '';
+      list.classList.toggle('hidden', query.length === 0);
+
+      if (query.length === 0) return;
+
+      try {
+        const response = await fetch(`http://127.0.0.1:5000/suggest?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        if (data.suggestions && data.suggestions.length > 0) {
+          data.suggestions.forEach((s, index) => {
+            const li = document.createElement('li');
+            li.textContent = s;
+            li.className = 'px-4 py-2 cursor-pointer hover:bg-gray-100 transition-colors duration-200 suggestion-item';
+            li.style.animationDelay = `${index * 50}ms`;
+            li.onclick = () => selectSuggestion(s);
+            list.appendChild(li);
+          });
+        } else {
+          const li = document.createElement('li');
+          li.textContent = 'No suggestions found';
+          li.className = 'px-4 py-2 text-gray-500';
+          list.appendChild(li);
+        }
+      } catch (err) {
+        console.error('Error fetching suggestions:', err);
+        showError('Failed to load suggestions.');
+      }
+    }
+
+    // Handle suggestion selection
+    async function selectSuggestion(s) {
+      const searchInput = document.getElementById('search');
+      searchInput.value = s;
+      document.getElementById('suggestions').classList.add('hidden');
+
+      try {
+        await fetch('http://127.0.0.1:5000/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: s })
+        });
+        window.location.href = `results.html?q=${encodeURIComponent(s)}`;
+      } catch (err) {
+        console.error('Error saving suggestion:', err);
+        showError('Failed to save query.');
+      }
+    }
+
+    // Fetch and display results
+    async function displayResults() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const query = urlParams.get('q');
+      if (!query) {
+        showError('No query provided.');
+        return;
+      }
+
+      document.getElementById('results-header').textContent = `Results for "${decodeURIComponent(query)}"`;
+      document.getElementById('search').value = decodeURIComponent(query);
+      toggleLoading(true);
+
+      try {
+        const response = await fetch(`http://127.0.0.1:5000/suggest?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        const resultsDiv = document.getElementById('results');
+        toggleLoading(false);
+
+        if (data.results && data.results.length > 0) {
+          data.results.forEach((r, index) => {
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'p-6 bg-white rounded-lg shadow-lg result-card flex items-start space-x-4';
+            resultDiv.style.animationDelay = `${index * 100}ms`;
+
+            // Image
+            if (r.image) {
+              const img = document.createElement('img');
+              img.src = r.image;
+              img.alt = r.title;
+              img.className = 'result-image';
+              resultDiv.appendChild(img);
+            }
+
+            // Content
+            const contentDiv = document.createElement('div');
+            const title = document.createElement('a');
+            title.href = r.url;
+            title.textContent = r.title;
+            title.className = 'text-blue-600 hover:underline text-xl font-semibold';
+            title.target = '_blank';
+            const snippet = document.createElement('p');
+            snippet.textContent = r.snippet + (r.snippet.endsWith('...') ? '' : '...');
+            snippet.className = 'text-gray-600 mt-1 text-sm';
+            contentDiv.appendChild(title);
+            contentDiv.appendChild(snippet);
+            resultDiv.appendChild(contentDiv);
+
+            resultsDiv.appendChild(resultDiv);
+          });
+        } else {
+          resultsDiv.innerHTML = `<p class="text-gray-500 text-center">No results found for "${decodeURIComponent(query)}". Try a different search term.</p>`;
+        }
+      } catch (err) {
+        console.error('Error fetching results:', err);
+        toggleLoading(false);
+        showError('Failed to load results.');
+      }
+    }
+
+    // Debounce function
+    function debounce(func, wait) {
+      let timeout;
+      return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    // Handle search input
+    const searchInput = document.getElementById('search');
+    searchInput.addEventListener('input', debounce(() => getSuggestions(searchInput.value), 300));
+    searchInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && searchInput.value) {
+        try {
+          await fetch('http://127.0.0.1:5000/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: searchInput.value })
+          });
+          window.location.href = `results.html?q=${encodeURIComponent(searchInput.value)}`;
+        } catch (err) {
+          console.error('Error saving query:', err);
+          showError('Failed to save query.');
+        }
+      }
+    });
+
+    // Load results on page load
+    window.onload = displayResults;
+  </script>
+</body>
+</html>
