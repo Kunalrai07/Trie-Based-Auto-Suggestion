@@ -26,4 +26,21 @@ A powerful and intelligent search engine built using **Trie Data Structure**, in
 ---
 
 ## 📁 Project Structure
+📦 trie-search-engine/
+├── app.py # Flask backend with search API and Trie logic
+├── trie.py # Trie data structure for auto-completion
+├── templates/
+│ └── index.html # Frontend search UI (HTML + JS)
+├── static/
+│ └── styles.css # Optional: Add your custom styles here
+├── search.db # SQLite database for history and clicks
+└── README.md # You're reading it!
+
+## ⚙️ Tech Stack
+
+- 💻 **Frontend**: HTML, CSS, JavaScript (AJAX)
+- 🔙 **Backend**: Flask (Python)
+- 🧠 **DSA**: Trie, Levenshtein Distance
+- 🗃️ **Database**: SQLite
+- 🌐 **Scraping**: BeautifulSoup (Wikipedia)
 
